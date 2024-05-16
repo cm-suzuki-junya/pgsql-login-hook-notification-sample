@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  NotificationAddress:
+    Type: String
+Resources:
+  UserNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: user_notification/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 60
+      Architectures:
+        - arm64
+      Environment:
+        Variables:
+          TOPIC_ARN: !Ref Topic
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: sns:Publish
+              Resource: !Ref Topic
+  Topic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      TopicName: rds-login-notification
+      DisplayName: rds-login-notification
+  Subscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref Topic
+      Protocol: email
+      Endpoint: !Ref NotificationAddress
+  ## 作成されるロールを拡張機能を追加するRDSインスタンスに別途手動で紐付ける
+  CallLoginNotificationRdsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+      Policies:
+        - PolicyName: "call-notification-function"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt UserNotificationFunction.Arn
+
